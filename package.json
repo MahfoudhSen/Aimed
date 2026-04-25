@@ -8,8 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "server": "node server.js",
-    "dev:full": "concurrently \"npm run server\" \"npm run dev\""
+    "backend": "python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload",
+    "dev:full": "concurrently -n \"BACKEND,FRONTEND\" -c \"yellow,cyan\" \"npm run backend\" \"npm run dev\""
   },
   "dependencies": {
     "react": "^19.2.5",
