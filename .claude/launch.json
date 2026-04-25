@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "SafeNest Backend",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"],
+      "port": 8000,
+      "cwd": "/Users/mahfoudh/Desktop/safe-nest"
+    },
+    {
+      "name": "SafeNest Frontend",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "3000", "--directory", "frontend"],
+      "port": 3000,
+      "cwd": "/Users/mahfoudh/Desktop/safe-nest"
+    }
+  ]
+}

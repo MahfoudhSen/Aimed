@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "SafeNest Vite",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/mahfoudh/Desktop/safe-nest && npm run dev -- --port $PORT --host"],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "SafeNest Backend",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/mahfoudh/Desktop/safe-nest && pip3 install -q -r requirements.txt 2>/dev/null; python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload"],
+      "port": 8000,
+      "autoPort": false
+    }
+  ]
+}

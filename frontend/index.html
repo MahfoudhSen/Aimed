@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeNest AI — Find Safe, Affordable Housing</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="logo">
+        <span class="logo-icon">🏠</span>
+        <span class="logo-text">SafeNest <span class="logo-ai">AI</span></span>
+      </div>
+      <nav class="nav">
+        <a href="#search" class="nav-link">Search</a>
+        <a href="#scam-check" class="nav-link">Scam Checker</a>
+        <a href="#affordability" class="nav-link">Affordability</a>
+        <button class="btn btn-primary" onclick="openChat()">Chat with AI</button>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <h1>Find Safe, Affordable Housing<br/><span class="gradient-text">Powered by AI</span></h1>
+        <p class="hero-sub">Search listings, detect scams, and check affordability — all in one place. Our AI chatbot is here to help 24/7.</p>
+        <div class="hero-search">
+          <input type="text" id="hero-search-input" placeholder="e.g. 1BR apartment Brooklyn under $1500/month" class="search-input" />
+          <button class="btn btn-primary btn-lg" onclick="heroSearch()">Search</button>
+        </div>
+        <div class="hero-tags">
+          <span class="tag" onclick="quickSearch('affordable studio Manhattan')">Studio Manhattan</span>
+          <span class="tag" onclick="quickSearch('1BR apartment Brooklyn under $1800')">1BR Brooklyn</span>
+          <span class="tag" onclick="quickSearch('shared room Queens under $900')">Shared Queens</span>
+          <span class="tag" onclick="quickSearch('2BR Bronx affordable')">2BR Bronx</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="search" class="section">
+    <div class="container">
+      <h2 class="section-title">Search Results</h2>
+      <div class="search-bar">
+        <input type="text" id="search-query" placeholder="Search housing in NYC..." class="search-input" />
+        <input type="number" id="search-budget" placeholder="Max budget ($/mo)" class="search-input small" />
+        <select id="search-location" class="search-input small">
+          <option value="NYC">All NYC</option>
+          <option value="Brooklyn">Brooklyn</option>
+          <option value="Manhattan">Manhattan</option>
+          <option value="Queens">Queens</option>
+          <option value="Bronx">Bronx</option>
+          <option value="Staten Island">Staten Island</option>
+        </select>
+        <button class="btn btn-primary" onclick="doSearch()">Search</button>
+      </div>
+      <div id="search-results" class="results-grid hidden"></div>
+      <div id="search-empty" class="empty-state">
+        <span class="empty-icon">🔍</span>
+        <p>Search for housing above to see listings</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="scam-check" class="section section-alt">
+    <div class="container">
+      <h2 class="section-title">Scam Detector</h2>
+      <p class="section-sub">Paste a rental listing description or ad text below. Our AI will analyze it for red flags.</p>
+      <div class="scam-form">
+        <textarea id="scam-text" class="textarea" rows="6" placeholder="Paste the full listing text here — title, description, price, contact info, etc."></textarea>
+        <button class="btn btn-primary" onclick="checkScam()">Analyze Listing</button>
+      </div>
+      <div id="scam-result" class="hidden"></div>
+    </div>
+  </section>
+
+  <section id="affordability" class="section">
+    <div class="container">
+      <h2 class="section-title">Affordability Calculator</h2>
+      <p class="section-sub">The standard rule: housing should cost no more than 30% of your gross monthly income.</p>
+      <div class="calc-form">
+        <div class="form-group">
+          <label>Monthly Rent ($)</label>
+          <input type="number" id="calc-rent" placeholder="e.g. 1400" class="input" />
+        </div>
+        <div class="form-group">
+          <label>Gross Monthly Income ($)</label>
+          <input type="number" id="calc-income" placeholder="e.g. 5000" class="input" />
+        </div>
+        <button class="btn btn-primary" onclick="calcAffordability()">Calculate</button>
+      </div>
+      <div id="calc-result" class="hidden"></div>
+    </div>
+  </section>
+
+  <section class="features section section-alt">
+    <div class="container">
+      <h2 class="section-title">Why SafeNest AI?</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🤖</div>
+          <h3>AI-Powered Chat</h3>
+          <p>Ask anything about NYC housing — neighborhoods, prices, tenant rights, scam advice — our AI assistant is available 24/7.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🚨</div>
+          <h3>Scam Detection</h3>
+          <p>Instantly identify red flags in listings: prices too good to be true, overseas landlords, wire transfer demands, and more.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Affordability Scoring</h3>
+          <p>Know instantly if a listing fits your budget using the 30% income rule — before you even contact the landlord.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔍</div>
+          <h3>Real-Time Search</h3>
+          <p>Search across Craigslist, StreetEasy, Zillow, and more from a single interface, filtered to your budget and location.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Chatbot button -->
+  <button class="chat-fab" onclick="openChat()" id="chat-fab" title="Chat with SafeNest AI">
+    <span class="chat-fab-icon">💬</span>
+  </button>
+
+  <!-- Chatbot panel -->
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-header">
+      <div class="chat-title">
+        <span class="chat-avatar">🏠</span>
+        <div>
+          <div class="chat-name">SafeNest AI</div>
+          <div class="chat-status">Online · Ready to help</div>
+        </div>
+      </div>
+      <button class="chat-close" onclick="closeChat()">✕</button>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-message bot">
+        <div class="message-bubble">
+          Hi! I'm SafeNest AI 👋<br/><br/>
+          I can help you find safe, affordable housing in NYC. Ask me about:<br/>
+          • Finding apartments by budget and neighborhood<br/>
+          • Checking if a listing looks like a scam<br/>
+          • Calculating affordability for your income<br/>
+          • Tenant rights and the rental process<br/><br/>
+          What are you looking for?
+        </div>
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <div class="chat-suggestions" id="chat-suggestions">
+        <button class="suggestion" onclick="sendSuggestion('Find me a 1BR under $1,500 in Brooklyn')">1BR Brooklyn &lt;$1,500</button>
+        <button class="suggestion" onclick="sendSuggestion('Is this listing a scam?')">Check a listing</button>
+        <button class="suggestion" onclick="sendSuggestion('I earn $4,000/month, what can I afford?')">What can I afford?</button>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Ask anything about NYC housing..." class="chat-input" onkeydown="chatKeydown(event)" />
+        <button class="chat-send" onclick="sendChat()" id="chat-send-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="container">
+      <p>SafeNest AI · Built for the BMCC/CUNY AI Innovation Challenge 2026 · AI for Housing & Urban Communities</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
