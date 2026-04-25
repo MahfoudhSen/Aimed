@@ -7,7 +7,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 import anthropic
-from duckduckgo_search import DDGS
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -17,6 +16,22 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
+# Craigslist NYC area codes
+BOROUGH_CODES = {
+    "Brooklyn": "brk",
+    "Queens": "que",
+    "Bronx": "brx",
+    "Manhattan": "mnh",
+    "Staten Island": "stn",
+}
+
+ROOM_TYPE_CODES = {
+    "Any room": "apa",
+    "Private room": "roo",
+    "Shared room": "roo",
+    "Studio": "apa",
+}
+
 CHAT_SYSTEM = """You are SafeNest AI, a housing assistant helping New Yorkers find safe, affordable housing.
 
 You help users:
@@ -25,18 +40,19 @@ You help users:
 - Calculate affordability using the 30% income rule
 - Understand NYC neighborhoods, tenant rights, and the rental process
 
-Keep answers concise and practical. When giving prices, use real NYC market context.
-Scam red flags: price way below market, owner abroad, wire/crypto/gift-card payment, no lease, no viewing."""
+Keep answers concise and practical. Use real NYC market context for prices.
+NYC scam red flags: price way below market, owner abroad, wire/crypto/gift-card payment, no lease, no viewing."""
 
 SEARCH_TOOL = {
     "name": "search_listings",
-    "description": "Search for rental listings in NYC.",
+    "description": "Search for real rental listings on Craigslist NYC.",
     "input_schema": {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Search query, e.g. '1BR apartment Brooklyn under $1500'"}
+            "borough": {"type": "string", "description": "NYC borough: Brooklyn, Queens, Bronx, Manhattan"},
+            "max_budget": {"type": "number", "description": "Max monthly rent in dollars"},
         },
-        "required": ["query"]
+        "required": ["borough"]
     }
 }
 
@@ -54,12 +70,22 @@ AFFORD_TOOL = {
 }
 
 
-def ddg_search(query: str, max_results: int = 6) -> list[dict]:
+def scrape_craigslist(borough: str, budget: int = 9999, room_type: str = "Any room") -> str:
+    area = BOROUGH_CODES.get(borough, "nyc")
+    cl_type = ROOM_TYPE_CODES.get(room_type, "apa")
+    url = f"https://newyork.craigslist.org/search/{area}/{cl_type}"
+    if budget < 9999:
+        url += f"?max_ask={budget}"
+
     try:
-        with DDGS() as ddgs:
-            return list(ddgs.text(query, max_results=max_results))
-    except Exception:
-        return []
+        resp = requests.get(
+            f"https://r.jina.ai/{url}",
+            headers={"Accept": "text/plain", "X-No-Cache": "true"},
+            timeout=30
+        )
+        return resp.text[:8000]  # limit to keep prompt small
+    except Exception as e:
+        return f"Error fetching listings: {e}"
 
 
 def calculate_affordability(rent: float, income: float) -> dict:
@@ -82,12 +108,35 @@ def calculate_affordability(rent: float, income: float) -> dict:
 
 def run_tool(name: str, inputs: dict) -> str:
     if name == "search_listings":
-        raw = ddg_search(
-            f"site:craigslist.org OR site:streeteasy.com OR site:zillow.com {inputs['query']} NYC rental",
-            max_results=5
+        borough = inputs.get("borough", "Brooklyn")
+        budget = int(inputs.get("max_budget", 9999))
+        raw = scrape_craigslist(borough, budget)
+        # Parse into structured listings via Claude
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": f"""Parse these Craigslist listings for {borough} NYC and return a JSON array.
+
+Each item must have:
+- title: string
+- price: number (monthly $)
+- location: string
+- description: string (1-2 sentences)
+- safe: boolean (false if scam red flags present)
+- score: integer 0-100 (safety score)
+- flags: string[] (red flags found, empty if none)
+
+Scam red flags: price absurdly low for NYC, owner overseas, wire transfer/crypto/gift cards required, no in-person viewing, urgent pressure.
+Typical NYC ranges: Brooklyn rooms $700-1400, Queens $650-1200, Bronx $600-1100, Manhattan $1000-2500.
+
+Raw page content:
+{raw}
+
+Return only a valid JSON array, max 6 listings."""}]
         )
-        results = [{"title": r.get("title", ""), "url": r.get("href", ""), "snippet": r.get("body", "")} for r in raw]
-        return json.dumps(results)
+        text = resp.content[0].text.strip()
+        m = re.search(r'\[.*\]', text, re.DOTALL)
+        return m.group(0) if m else "[]"
     if name == "calculate_affordability":
         return json.dumps(calculate_affordability(inputs["monthly_rent"], inputs["monthly_income"]))
     return json.dumps({"error": "Unknown tool"})
@@ -96,45 +145,33 @@ def run_tool(name: str, inputs: dict) -> str:
 # ── /api/search-analyze ───────────────────────────────────────
 @app.get("/api/search-analyze")
 async def search_analyze(borough: str, budget: int = 9999, room_type: str = "Any room"):
-    query = f"{room_type} rental {borough} NYC"
-    if budget < 9999:
-        query += f" under ${budget} per month"
+    raw = scrape_craigslist(borough, budget, room_type)
 
-    raw = ddg_search(
-        f"site:craigslist.org OR site:streeteasy.com OR site:apartments.com {query}",
-        max_results=8
-    )
-
-    if not raw:
-        return {"listings": []}
-
-    snippets = json.dumps(
-        [{"title": r.get("title", ""), "snippet": r.get("body", ""), "url": r.get("href", "")} for r in raw],
-        indent=2
-    )
+    if not raw or raw.startswith("Error"):
+        return {"listings": [], "error": raw}
 
     resp = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=2000,
-        messages=[{"role": "user", "content": f"""Analyze these NYC rental search results for {room_type} in {borough} (budget: ${budget}/mo).
+        messages=[{"role": "user", "content": f"""Parse these Craigslist rental listings for {room_type} in {borough} NYC (budget: ${budget}/mo).
 
-{snippets}
-
-Return a JSON array of actual rental listings. Each object must have:
-- title: string
-- price: number (monthly $; estimate from context or use typical {borough} market rate if unclear)
+Extract real listings and return a JSON array. Each item:
+- title: string (listing title)
+- price: number (monthly rent $; skip if price not found)
 - location: string (neighborhood, {borough})
 - description: string (2-3 sentences about the unit)
-- safe: boolean (false if scam red flags present)
-- score: integer 0-100 (safety; 80+ = legit, <50 = scam)
+- safe: boolean (false = scam red flags detected)
+- score: integer 0-100 (safety; 80+ = legit, <50 = likely scam)
 - flags: string[] (specific red flags; [] if none)
 
-NYC scam red flags: price absurdly below market, owner overseas, wire/Western Union/crypto required,
-no in-person viewing, urgent pressure, no lease. Brooklyn/Queens rooms typically $700-1300,
-Manhattan $1000-2500, Bronx $600-1100.
+NYC scam red flags: price way below market rate, owner overseas/unavailable, wire transfer/Western Union/crypto/gift cards required, no in-person viewing, extreme urgency, no address.
+Typical NYC ranges: Brooklyn rooms $700-1400/mo, Queens $650-1200/mo, Bronx $600-1100/mo, Manhattan $1000-2500/mo.
 
-Exclude non-listing results (articles, directories). Only include listings ≤ $${budget}.
-Respond with only a valid JSON array."""}]
+Raw Craigslist page:
+{raw}
+
+Only include actual rental listings (skip ads, navigation, articles). Max 8 listings.
+Respond with only a valid JSON array — no markdown, no explanation."""}]
     )
 
     text = resp.content[0].text.strip()
@@ -148,7 +185,7 @@ Respond with only a valid JSON array."""}]
         return {"listings": []}
 
 
-# ── /api/analyze (paste-a-listing scam check) ────────────────
+# ── /api/analyze ─────────────────────────────────────────────
 class AnalyzeReq(BaseModel):
     listing_text: str
 
@@ -179,7 +216,7 @@ Listing:
         return {"risk_level": "Unknown", "risk_score": 0, "red_flags": [], "explanation": text, "recommendation": ""}
 
 
-# ── /api/chat (SSE streaming with tool use) ──────────────────
+# ── /api/chat ─────────────────────────────────────────────────
 class ChatReq(BaseModel):
     messages: list[dict]
 
@@ -205,7 +242,7 @@ async def chat(req: ChatReq):
                             tool_input_buffers[cur_id] = {
                                 "id": cur_id, "name": event.content_block.name, "raw": ""
                             }
-                        elif event.content_block.type == "text":
+                        else:
                             cur_id = None
                     elif event.type == "content_block_delta":
                         if event.delta.type == "text_delta":
@@ -253,7 +290,7 @@ async def health():
     return {"status": "ok"}
 
 
-# Serve Vite dist build
+# Serve Vite dist
 dist_dir = os.path.join(os.path.dirname(__file__), "..", "dist")
 if os.path.isdir(dist_dir):
     app.mount("/", StaticFiles(directory=dist_dir, html=True), name="static")
